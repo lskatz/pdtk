@@ -15,10 +15,10 @@ my $preop = 'true';
 
 WriteMakefile1(
   NAME         => 'template',
-  VERSION_FROM => 'scripts/template.pl',
+  VERSION_FROM => 'scripts/pdtk.pl',
   AUTHOR => q{Lee S. Katz <gzu2@cdc.gov>},
   EXE_FILES    => [
-    "scripts/template.pl",
+    "scripts/pdtk.pl",
   ],
   PREREQ_PM    => {
     # Core modules
@@ -26,6 +26,11 @@ WriteMakefile1(
     'Data::Dumper'   => 0,
     'version'        => 0.77,
     'Getopt::Long'   => 0,
+    'File::Path'     => 0,
+    'File::Copy'     => 0,
+    'File::Find'     => 0,
+    'Net::FTP'       => 0,
+    'Cwd'            => 0,
   },
   BUILD_REQUIRES => {
     'Test::More'     => 0.47,
@@ -42,8 +47,8 @@ WriteMakefile1(
     resources => {
       repository => {
         type => 'git',
-        url => 'git://github.com/lskatz/template.git',
-        web => 'https://github.com/lskatz/template',
+        url => 'git://github.com/lskatz/pdtk.git',
+        web => 'https://github.com/lskatz/pdtk',
       },
     },
   },

@@ -1,29 +1,88 @@
-# template-perl
-A simple template for perl projects
+# Pathogen Detection toolkit
+A way to interact with the data from the NCBI Pathogen Detection Portal.
+This specific repo was not developed by anyone at NCBI however.
 
 # Usage
 
-Click the button at the top of GitHub that says `Use this template` and then edit away
+```text
+pdtk.pl: interacts with the NCBI Pathogens Portal
+  Usage: pdtk.pl [options]
+  SUBCOMMANDS
+  --list             List which taxa are available
+  --download         Download data to ~/.pdtk
+  --query            Query from S1
+  --clean            (TODO) clean up ~/.pdtk
+  --help             This useful help menu
 
-# Contents
+  OPTIONS
+  --taxon    TAXON   Limit the query to this taxon
+  --sample1  S1      PDT accession to query from
+  --within   X       Number of SNPs to query away from S1
+  --sample2  S2      PDT accession to query from S1
+```
 
-`Makefile.pl` - Running this file with `perl Makefile.PL` creates an actual `Makefile` with certain usages such as
+# Installation
 
-* `make`
-* `make test`
-* `make install`
-* `make manifest`
-* `make dist`
+Simply run the script directly or bring it into your path.
 
-## scripts
+```bash
+cd ~/bin
+git clone git@github.com:lskatz/pdtk.git
+export PATH=$HOME/bin/pdtk/scripts:$PATH
+```
 
-`template.pl` A single script that has basic modules and usage. Rename this file to what suits you.
-You can add more scripts here.
+# Examples
 
-## t
+## List of all possible datasets to interact with
 
-`01_index.t` A single perl script that has a unit test in it. Rename `_index` to what your usage would be.
-You can add additional tests in this folder. There is a two digit number here in the script name(s) so that
-the scripts will be run in the correct order even though the system will sort alphabetically instead
-of numerically.
+```bash
+perl scripts/pdtk.pl --list | shuf | head -n 5 | sort
+```
+
+```text
+Enterobacter_kobei
+Kosakonia_oryzendophytica
+Pluralibacter_gergoviae
+Staphylococcus_aureus
+Yersinia_ruckeri
+```
+
+## Download the data
+
+To run the rest of this toolkit, you will need the data locally.
+This subcommand downloads from the FTP site, then indexes with SQLite.
+
+```bash
+perl pdtk.pl --download
+```
+
+## Query
+
+The toolkit is very limited at this time to simple querying.
+To request anything, please make an issues ticket on github and be specific.
+
+Querying is done using PDT accessions.
+
+### Find close neighbors
+
+Distance is measured in `compatible_distance` which is derived from SNP distances.
+Output columns match what is found in the NCBI files but the order of those columns is not stable.
+
+In this example, we are looking for anything within 1 SNP of our accession.
+
+```bash
+pdtk.pl --query --sample1 PDT000503455.1 --taxon Listeria --within 1 | column -t
+
+compatible_distance  target_acc_2    aligned_bases_pre_filtered  sample_name_2  biosample_acc_1  informative_positions  sample_name_1  total_positions  delta_positions_both_N  delta_positions_one_N  delta_positions_unambiguous  pairwise_bases_post_filtered  target_acc_1    PDS_acc         compatible_positions  gencoll_acc_1    aligned_bases_post_filtered  gencoll_acc_2    biosample_acc_2
+1                    PDT000503469.1  2855359                     NULL           SAMN11784268     2                      NULL           2                0                       0                      1                            NULL                          PDT000503455.1  PDS000045942.1  2                     GCA_005875935.1  2855359                      GCA_005875995.1  SAMN11784285
+1                    PDT000503497.1  2846243                     NULL           SAMN11784268     2                      NULL           2                0                       0                      1                            NULL                          PDT000503455.1  PDS000045942.1  2                     GCA_005875935.1  2846243                      GCA_005876095.1  SAMN11784330
+```
+
+In this example, we are looking for a specific distance between two accessions
+
+```bash
+perl pdtk.pl --query --sample1 PDT000503455.1 --taxon Listeria --sample2 PDT000503497.1 | column -t
+delta_positions_unambiguous  biosample_acc_1  target_acc_2    delta_positions_both_N  sample_name_1  pairwise_bases_post_filtered  target_acc_1    compatible_positions  compatible_distance  sample_name_2  total_positions  informative_positions  aligned_bases_post_filtered  delta_positions_one_N  biosample_acc_2  gencoll_acc_1    aligned_bases_pre_filtered  gencoll_acc_2    PDS_acc
+1                            SAMN11784268     PDT000503497.1  0                       NULL           NULL                          PDT000503455.1  2                     1                    NULL           2                2                      2846243                      0                      SAMN11784330     GCA_005875935.1  2846243                     GCA_005876095.1  PDS000045942.1
+```
 

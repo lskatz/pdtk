@@ -4,16 +4,12 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Getopt::Long;
-use IO::Uncompress::AnyUncompress qw/anyuncompress $AnyUncompressError/;
 use File::Basename qw/basename/;
 use File::Copy qw/mv/;
 use File::Path qw/rmtree/;
 use File::Find qw/find/;
 use Net::FTP;
-#use Net::FTP::Recursive;
-use LWP::Simple qw/get head/;
 use Cwd qw/getcwd/;
-use IO::Compress::Gzip qw(gzip $GzipError) ;
 
 use version 0.77;
 our $VERSION = '0.1.1';
@@ -43,12 +39,26 @@ sub main{
   # Subcommand: download whole database
   if($$settings{download}){
     downloadAll($settings);
-    compressAll($settings);
+    indexAll($settings);
+    #compressAll($settings);
     return 0;
   }
 
   if($$settings{query}){
-    querySample($settings);
+    my $res = querySample($settings);
+    my @sampleHit = sort keys(%$res);
+
+    # Print the header from the db
+    my @header = keys($$res{$sampleHit[0]});
+    print join("\t", @header)."\n";
+    for my $s(@sampleHit){
+      my $line;
+      for my $h(@header){
+        $line .= $$res{$s}{$h} ."\t";
+      }
+      $line =~ s/\t$//; # remove last tab
+      print $line ."\n";
+    }
     return 0;
   }
 
@@ -71,38 +81,50 @@ sub querySample{
   if(!$$settings{taxon}){
     die "ERROR: required parameter --taxon missing";
   }
-  
+
   my $within = $$settings{within} || 1000;
 
   my $clustersDir = "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results/$$settings{taxon}/latest_snps/Clusters";
-  my $snpsFile = (glob("$clustersDir/*.reference_target.SNP_distances.tsv.gz"))[0];
-  if(!-e $snpsFile){
-    die "ERROR: could not find expected SNP distance file in $clustersDir with suffix .reference_target.SNP_distances.tsv";
+  my $db = (glob("$clustersDir/*.reference_target.SNP_distances.tsv.sqlite3"))[0];
+  if(!-e $db){
+    die "ERROR: could not find expected sqlite3 distance file in $clustersDir with suffix .reference_target.SNP_distances.tsv.sqlite3";
   }
-  logmsg "Reading from $snpsFile";
+  logmsg "Reading from $db";
 
-  my $z = IO::Uncompress::AnyUncompress->new($snpsFile)
-      or die "IO::Uncompress::AnyUncompress failed on $snpsFile: $AnyUncompressError\n";
-  my $header = $z->getline();
-  chomp($header);
-  my @header = split(/\t/, $header);
-  while(my $line = <$z>){
-    chomp $line;
-    my @F = split(/\t/, $line);
-    my %F;
-    for(my $i=0;$i<@header;$i++){
-      $F{$header[$i]} = $F[$i];
-    }
+  my $cmd = qq(sqlite3 $db -separator "\t" --header 'SELECT * FROM SNP_distances WHERE (target_acc_1 = "$sample1" OR target_acc_2 = "$sample1") AND compatible_distance+0 <= $within ');
 
-    if($F{target_acc_1} eq $sample1 || $F{target_acc_2} eq $sample1){
-
-      if($F{compatible_distance} <= $$settings{within}){
-        print $line ."\n";
-      }
-
-    }
+  # If the second sample is provided, then ignore --within
+  if($$settings{sample2}){
+    $cmd = qq(sqlite3 $db -separator "\t" --header 'SELECT * FROM SNP_distances WHERE (target_acc_1 = "$sample1" AND target_acc_2 = "$$settings{sample2}") OR (target_acc_2 = "$sample1" AND target_acc_1 = "$$settings{sample2}")' );
   }
   
+  my @res = `$cmd`;
+  if(!@res){
+    logmsg "WARNING: no hits found with query\n  $cmd";
+    return {};
+  }
+
+  chomp(@res);
+  my @header = split(/\t/, shift(@res));
+
+  # Put it into a hash of hashes where sample2 is the key
+  my %resHashes;
+  for(my $i=0;$i<@res;$i++){
+    my %F;
+    my @F = split(/\t/, $res[$i]);
+    for(my $j=0;$j<@header;$j++){
+      $F{$header[$j]} = $F[$j];
+    }
+
+    my $key = $F{target_acc_1};
+    if($key eq $sample1){
+      $key = $F{target_acc_2};
+    }
+
+    $resHashes{$key} = \%F;
+  }
+
+  return \%resHashes;
 }
 
 sub downloadAll{
@@ -153,16 +175,17 @@ sub downloadAll{
   return 1;
 }
 
-sub compressAll{
+sub indexAll{
   my($settings) = @_;
 
-  my $doneMarker = "$localFiles/.02_compress";
+  my $doneMarker = "$localFiles/.03_index";
 
   if(-e $doneMarker){
     logmsg "NOTE: files have already been compressed. Remove $doneMarker to release the lock.";
     return 0;
   }
 
+  # TODO be smarter about combining the tsv files in Clusters directories
   find({
     wanted=>sub{
       if($_ =~ /\.(\w+)$/){
@@ -171,10 +194,14 @@ sub compressAll{
       } else {
         return;
       }
-      logmsg "Compressing $_";
-      gzip(
-        $File::Find::name => $File::Find::name . ".gz"
-      ) or die "gzip failed on $File::Find::name: $GzipError\n";
+      logmsg "Indexing $File::Find::name";
+      my $cmd = "sqlite3 --header -separator \$'\\t' $File::Find::name.sqlite3  '.import $File::Find::name SNP_distances'";
+      system($cmd);
+      my $exit_code = $? << 8;
+      if($exit_code){
+        logmsg "COMMAND was:\n  $cmd";
+        die "ERROR: Could not index into sqlite3: $File::Find::name: $!";
+      }
       unlink($File::Find::name);
     },
     no_chdir=>1}, "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results"

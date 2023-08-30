@@ -11,7 +11,7 @@ use Test::More tests => 1;
 
 $ENV{PATH} = "$RealBin/../scripts:".$ENV{PATH};
 
-diag `template.pl -h`;
+diag `pdtk.pl -h`;
 my $exit_code = $? << 8;
 is($exit_code, 0, "exit code");
 
