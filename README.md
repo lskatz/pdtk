@@ -2,6 +2,8 @@
 A way to interact with the data from the NCBI Pathogen Detection Portal.
 This specific repo was not developed by anyone at NCBI however.
 
+For more information: https://www.ncbi.nlm.nih.gov/pathogens
+
 # Usage
 
 ```text
@@ -41,9 +43,6 @@ export PATH=$HOME/bin/pdtk/scripts:$PATH
 
 ```bash
 perl scripts/pdtk.pl --list | shuf | head -n 5 | sort
-```
-
-```text
 Enterobacter_kobei
 Kosakonia_oryzendophytica
 Pluralibacter_gergoviae
@@ -88,5 +87,33 @@ In this example, we are looking for a specific distance between two accessions
 perl pdtk.pl --query --sample1 PDT000503455.1 --taxon Listeria --sample2 PDT000503497.1 | column -t
 delta_positions_unambiguous  biosample_acc_1  target_acc_2    delta_positions_both_N  sample_name_1  pairwise_bases_post_filtered  target_acc_1    compatible_positions  compatible_distance  sample_name_2  total_positions  informative_positions  aligned_bases_post_filtered  delta_positions_one_N  biosample_acc_2  gencoll_acc_1    aligned_bases_pre_filtered  gencoll_acc_2    PDS_acc
 1                            SAMN11784268     PDT000503497.1  0                       NULL           NULL                          PDT000503455.1  2                     1                    NULL           2                2                      2846243                      0                      SAMN11784330     GCA_005875935.1  2846243                     GCA_005876095.1  PDS000045942.1
+```
+
+### Find targets
+
+If you sort of know what you want to query with but don't quite know what the exact target names are,
+you can search on these fields: `sample_name`, `biosample_acc`, `target_acc`, `gencoll_acc`, `PDS_acc`.
+
+```bash
+perl pdtk.pl --taxon Listeria --find-target PDT000503497% | column -t
+target_acc_1    biosample_acc_1  gencoll_acc_1    sample_name_1  target_acc_2    biosample_acc_2  gencoll_acc_2    sample_name_2  PDS_acc         aligned_bases_pre_filtered  aligned_bases_post_filtered  delta_positions_unambiguous  delta_positions_one_N  delta_positions_both_N  informative_positions  total_positions  pairwise_bases_post_filtered  compatible_distance  compatible_positions
+PDT000503469.1  SAMN11784285     GCA_005875995.1  NULL           PDT000503497.1  SAMN11784330     GCA_005876095.1  NULL           PDS000045942.1  2848432                     2848432                      0                            0                      0                       2                      2                NULL                          0                    2
+PDT000503455.1  SAMN11784268     GCA_005875935.1  NULL           PDT000503497.1  SAMN11784330     GCA_005876095.1  NULL           PDS000045942.1  2846243                     2846243                      1                            0                      0                       2                      2                NULL                          1                    2
+PDT000503463.1  SAMN11784293     GCA_005875955.1  NULL           PDT000503497.1  SAMN11784330     GCA_005876095.1  NULL           PDS000045942.1  2844832                     2844766                      1                            0                      0                       2                      2                NULL                          1                    2
+```
+
+Aha the full name is `PDT000503497.1` from the results!
+
+Or, a question like which samples are in this particular SNP tree?
+
+```bash
+perl pdtk.pl --taxon Listeria --find-target PDS000045942%
+target_acc_1    biosample_acc_1 gencoll_acc_1   sample_name_1   target_acc_2    biosample_acc_2 gencoll_acc_2   sample_name_2     PDS_acc aligned_bases_pre_filtered      aligned_bases_post_filtered     delta_positions_unambiguous       delta_positions_one_N   delta_positions_both_N  informative_positions   total_positions pairwise_bases_post_filtered      compatible_distance     compatible_positions
+PDT000503455.1  SAMN11784268    GCA_005875935.1 NULL    PDT000503469.1  SAMN11784285    GCA_005875995.1 NULL    PDS000045942.1    2855359 2855359 1       0       0       2       2       NULL    1       2
+PDT000503463.1  SAMN11784293    GCA_005875955.1 NULL    PDT000503469.1  SAMN11784285    GCA_005875995.1 NULL    PDS000045942.1    2852801 2852710 1       0       0       2       2       NULL    1       2
+PDT000503469.1  SAMN11784285    GCA_005875995.1 NULL    PDT000503497.1  SAMN11784330    GCA_005876095.1 NULL    PDS000045942.1    2848432 2848432 0       0       0       2       2       NULL    0       2
+PDT000503455.1  SAMN11784268    GCA_005875935.1 NULL    PDT000503463.1  SAMN11784293    GCA_005875955.1 NULL    PDS000045942.1    2850363 2850272 2       0       0       2       2       NULL    2       2
+PDT000503455.1  SAMN11784268    GCA_005875935.1 NULL    PDT000503497.1  SAMN11784330    GCA_005876095.1 NULL    PDS000045942.1    2846243 2846243 1       0       0       2       2       NULL    1       2
+PDT000503463.1  SAMN11784293    GCA_005875955.1 NULL    PDT000503497.1  SAMN11784330    GCA_005876095.1 NULL    PDS000045942.1    2844832 2844766 1       0       0       2       2       NULL    1       2
 ```
 

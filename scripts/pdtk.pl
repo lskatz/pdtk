@@ -102,7 +102,7 @@ sub findTarget{
   system($cmd);
   # sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
 
-  die;
+  return 1;
 }
 
 sub querySample{
