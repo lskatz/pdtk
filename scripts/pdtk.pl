@@ -23,10 +23,8 @@ exit(main());
 
 sub main{
   my $settings={};
-  GetOptions($settings,qw(sample1=s sample2=s within=i query taxon=s list download help)) or die $!;
+  GetOptions($settings,qw(sample1=s sample2=s within=i query taxon=s find-target=s list download help)) or die $!;
   usage() if($$settings{help});
-
-  ##### subcommands
 
   # Subcommand: List all taxa
   if($$settings{list}){
@@ -44,6 +42,13 @@ sub main{
     return 0;
   }
 
+  # Subcommand: find target
+  if($$settings{'find-target'}){
+    findTarget($$settings{'find-target'}, $settings);
+    return 0;
+  }
+
+  # Subcommand: query
   if($$settings{query}){
     my $res = querySample($settings);
     my @sampleHit = sort keys(%$res);
@@ -62,9 +67,42 @@ sub main{
     return 0;
   }
 
-  ######
-
   return 0;
+}
+
+sub findTarget{
+  my($query, $settings) = @_;
+
+  # Check to make sure database is there
+  if(!-d "$localFiles/ftp.ncbi.nlm.nih.gov"){
+    die "ERROR: no database found at $localFiles. Please run $0 --download to correct";
+  }
+  if(!$$settings{taxon}){
+    die "ERROR: required parameter --taxon missing";
+  }
+
+  my $clustersDir = "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results/$$settings{taxon}/latest_snps/Clusters";
+  my $db = (glob("$clustersDir/*.reference_target.SNP_distances.tsv.sqlite3"))[0];
+  if(!-e $db){
+    die "ERROR: could not find expected sqlite3 distance file in $clustersDir with suffix .reference_target.SNP_distances.tsv.sqlite3";
+  }
+  logmsg "Reading from $db";
+
+  my $cmd = qq(sqlite3 $db -separator "\t" --header 'SELECT * FROM SNP_distances
+  WHERE sample_name_1 LIKE "$query" 
+    OR sample_name_2 LIKE "$query" 
+    OR biosample_acc_1 LIKE "$query"
+    OR biosample_acc_2 LIKE "$query"
+    OR target_acc_1 LIKE "$query" 
+    OR target_acc_2 LIKE "$query"
+    OR gencoll_acc_1 LIKE "$query"
+    OR gencoll_acc_2 LIKE "$query"
+    OR PDS_acc LIKE "$query"');
+  #logmsg $cmd;
+  system($cmd);
+  # sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
+
+  die;
 }
 
 sub querySample{
@@ -247,6 +285,10 @@ sub usage{
   --download         Download data to ~/.pdtk
   --query            Query from S1
   --clean            (TODO) clean up ~/.pdtk
+  --find-target S1   Find rows matching an accession.
+                     Useful for finding PDT accessions.
+                     Searches fields: sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
+                     Use SQLite syntax for wildcards, e.g., %
   --help             This useful help menu
 
   OPTIONS

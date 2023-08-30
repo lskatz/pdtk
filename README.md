@@ -12,6 +12,10 @@ pdtk.pl: interacts with the NCBI Pathogens Portal
   --download         Download data to ~/.pdtk
   --query            Query from S1
   --clean            (TODO) clean up ~/.pdtk
+  --find-target S1   Find rows matching an accession.
+                     Useful for finding PDT accessions.
+                     Searches fields: sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
+                     Use SQLite syntax for wildcards, e.g., %
   --help             This useful help menu
 
   OPTIONS
