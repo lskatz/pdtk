@@ -37,6 +37,11 @@ git clone git@github.com:lskatz/pdtk.git
 export PATH=$HOME/bin/pdtk/scripts:$PATH
 ```
 
+## Requirements
+
+* Perl
+* SQLite3
+
 # Examples
 
 ## List of all possible datasets to interact with
