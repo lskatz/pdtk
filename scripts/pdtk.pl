@@ -62,10 +62,9 @@ sub main{
   if($$settings{query}){
     my $res = querySample($settings);
     my @sampleHit = sort keys(%$res);
-    die Dumper {res=>$res};
 
     # Print the header from the db
-    my @header = keys($$res{$sampleHit[0]});
+    my @header = keys(%{ $$res{$sampleHit[0]} });
     print join("\t", @header)."\n";
     for my $s(@sampleHit){
       my $line;
