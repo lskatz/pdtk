@@ -62,6 +62,7 @@ sub main{
   if($$settings{query}){
     my $res = querySample($settings);
     my @sampleHit = sort keys(%$res);
+    print Dumper $res;
 
     # Print the header from the db
     my @header = keys($$res{$sampleHit[0]});
