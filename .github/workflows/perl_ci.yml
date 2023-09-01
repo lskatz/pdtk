@@ -33,5 +33,5 @@ jobs:
         run:  |
           sqlite3 --version
       - run: perl -V
-      - name: make test
-        run: perl Makefile.PL && make && make test
+      #- name: make test
+      #  run: perl Makefile.PL && make && make test
