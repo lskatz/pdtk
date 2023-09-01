@@ -29,8 +29,6 @@ jobs:
           sudo apt-get install -y sqlite3
       - name: versions
         run:  |
-          mash --version
-          quicktree -v
           sqlite3 --version
       - run: perl -V
       - name: make test
