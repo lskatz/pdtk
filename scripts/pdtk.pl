@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Getopt::Long;
-use File::Basename qw/basename/;
+use File::Basename qw/basename dirname/;
 use File::Copy qw/mv/;
 use File::Path qw/rmtree/;
 use File::Find qw/find/;
@@ -16,6 +16,7 @@ our $VERSION = '0.1.2';
 
 our $baseUrl = "ftp.ncbi.nlm.nih.gov";
 our $localFiles = $ENV{HOME} . "/.pdtk";
+our $defaultDb = "$localFiles/pdtk.sqlite3";
 
 local $0 = basename $0;
 sub logmsg{local $0=basename $0; print STDERR "$0: @_\n";}
@@ -23,8 +24,12 @@ exit(main());
 
 sub main{
   my $settings={};
-  GetOptions($settings,qw(sample1=s sample2=s within=i query debug version taxon=s find-target=s list download help)) or die $!;
+  GetOptions($settings,qw(sample1=s sample2=s db=s within=i amr query debug version find-target=s list download help)) or die $!;
   usage() if($$settings{help});
+
+  # Set up where the database lives
+  $$settings{db} //= $defaultDb;
+  $localFiles = dirname($$settings{db});
 
   if($$settings{version}){
     print "$0 v$VERSION\n";
@@ -64,6 +69,7 @@ sub main{
     for my $s(@sampleHit){
       my $line;
       for my $h(@header){
+        $$res{$s}{$h} //= "NULL";
         $line .= $$res{$s}{$h} ."\t";
       }
       $line =~ s/\t$//; # remove last tab
@@ -82,18 +88,16 @@ sub findTarget{
   if(!-d "$localFiles/ftp.ncbi.nlm.nih.gov"){
     die "ERROR: no database found at $localFiles. Please run $0 --download to correct";
   }
-  if(!$$settings{taxon}){
-    die "ERROR: required parameter --taxon missing";
-  }
 
-  my $clustersDir = "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results/$$settings{taxon}/latest_snps/Clusters";
-  my $db = (glob("$clustersDir/*.reference_target.SNP_distances.tsv.sqlite3"))[0];
+  my $db = $$settings{db};
   if(!-e $db){
-    die "ERROR: could not find expected sqlite3 distance file in $clustersDir with suffix .reference_target.SNP_distances.tsv.sqlite3";
+    die "ERROR: no database found at $db. Please run $0 --download to correct";
   }
   logmsg "Reading from $db";
 
-  my $cmd = qq(sqlite3 $db -separator "\t" --header 'SELECT * FROM SNP_distances
+  my $cmd = qq(sqlite3 $db -separator "\t" --header '
+  SELECT *
+  FROM SNP_distances AS snps
   WHERE sample_name_1 LIKE "$query" 
     OR sample_name_2 LIKE "$query" 
     OR biosample_acc_1 LIKE "$query"
@@ -103,9 +107,13 @@ sub findTarget{
     OR gencoll_acc_1 LIKE "$query"
     OR gencoll_acc_2 LIKE "$query"
     OR PDS_acc LIKE "$query"');
-  #logmsg $cmd;
+  
+  # If we want AMR results, add in a LEFT JOIN statement
+  if($$settings{amr}){
+    $cmd =~ s/(FROM SNP_distances AS snps)/$1\nLEFT JOIN amr_metadata AS amr\nON snps.target_acc_1 = amr.target_acc OR snps.target_acc_2 = amr.target_acc\n/;
+  }
+
   system($cmd);
-  # sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
 
   return 1;
 }
@@ -117,28 +125,35 @@ sub querySample{
     or die "ERROR: required parameter --sample1 not found";
 
   # Check to make sure database is there
-  if(!-d "$localFiles/ftp.ncbi.nlm.nih.gov"){
-    die "ERROR: no database found at $localFiles. Please run $0 --download to correct";
-  }
-
-  if(!$$settings{taxon}){
-    die "ERROR: required parameter --taxon missing";
+  my $db = $$settings{db};
+  if(!-e $db){
+    die "ERROR: no database found at $db. Please run $0 --download to correct";
   }
 
   my $within = $$settings{within} || 1000;
 
-  my $clustersDir = "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results/$$settings{taxon}/latest_snps/Clusters";
-  my $db = (glob("$clustersDir/*.reference_target.SNP_distances.tsv.sqlite3"))[0];
-  if(!-e $db){
-    die "ERROR: could not find expected sqlite3 distance file in $clustersDir with suffix .reference_target.SNP_distances.tsv.sqlite3";
-  }
   logmsg "Reading from $db";
 
-  my $cmd = qq(sqlite3 $db -separator "\t" --header 'SELECT * FROM SNP_distances WHERE (target_acc_1 = "$sample1" OR target_acc_2 = "$sample1") AND compatible_distance+0 <= $within ');
+  my $cmd = qq(sqlite3 $db -separator "\t" --header '
+    SELECT *
+    FROM SNP_distances AS snps
+    WHERE (target_acc_1 = "$sample1" OR target_acc_2 = "$sample1")
+      AND compatible_distance+0 <= $within
+    ');
 
   # If the second sample is provided, then ignore --within
   if($$settings{sample2}){
-    $cmd = qq(sqlite3 $db -separator "\t" --header 'SELECT * FROM SNP_distances WHERE (target_acc_1 = "$sample1" AND target_acc_2 = "$$settings{sample2}") OR (target_acc_2 = "$sample1" AND target_acc_1 = "$$settings{sample2}")' );
+    $cmd = qq(sqlite3 $db -separator "\t" --header '
+    SELECT *
+    FROM SNP_distances AS snps
+    WHERE (target_acc_1 = "$sample1" AND target_acc_2 = "$$settings{sample2}")
+      OR (target_acc_2 = "$sample1" AND target_acc_1 = "$$settings{sample2}")
+    ');
+  }
+  
+  # If we want AMR results, add in a LEFT JOIN statement
+  if($$settings{amr}){
+    $cmd =~ s/(FROM SNP_distances AS snps)/$1\nLEFT JOIN amr_metadata AS amr\nON snps.target_acc_1 = amr.target_acc OR snps.target_acc_2 = amr.target_acc\n/;
   }
   
   my @res = `$cmd`;
@@ -229,7 +244,7 @@ sub createBlankDb{
   qx(sqlite3 \Q$db\E '
     -- Table: all_isolates
     CREATE TABLE all_isolates (
-        target_acc TEXT,
+        target_acc TEXT PRIMARY KEY,
         min_dist_same INTEGER,
         min_dist_opp INTEGER,
         PDS_acc TEXT
@@ -240,12 +255,13 @@ sub createBlankDb{
         PDS_acc TEXT,
         target_acc TEXT,
         biosample_acc TEXT,
-        gencoll_acc TEXT
+        gencoll_acc TEXT,
+        PRIMARY KEY (PDS_acc, target_acc)
     );
 
     -- Table: new_isolates
     CREATE TABLE new_isolates (
-        target_acc TEXT,
+        target_acc TEXT PRIMARY KEY,
         min_dist_same INTEGER,
         min_dist_opp INTEGER,
         PDS_acc TEXT
@@ -271,7 +287,8 @@ sub createBlankDb{
         total_positions INTEGER,
         pairwise_bases_post_filtered INTEGER,
         compatible_distance INTEGER,
-        compatible_positions INTEGER
+        compatible_positions INTEGER,
+        PRIMARY KEY (target_acc_1, target_acc_2, PDS_acc)
     );
 
     -- Table: amr_metadata
@@ -314,7 +331,7 @@ sub createBlankDb{
         strain TEXT,
         sequenced_by TEXT,
         project_name TEXT,
-        target_acc TEXT,
+        target_acc TEXT PRIMARY_KEY,
         target_creation_date TEXT,
         taxid TEXT,
         wgs_acc_prefix TEXT,
@@ -370,24 +387,25 @@ sub indexAll{
       }
 
       logmsg "Indexing $File::Find::name";
-      my $sqlXopts = "--header -separator \$'\\t' $db";
+      my $sqlXopts = "-separator \$'\\t' $db";
+      my $importXopts = "--skip 1";
       my $cmd = "echo 'INTERNAL ERROR: no command supplied with file $File::Find::name.'; exit 2;";
       if($_ =~ /reference_target.all_isolates.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name all_isolates');
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name all_isolates');
       }
       elsif($_ =~ /reference_target.cluster_list.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name cluster_list');
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name cluster_list');
       }
       elsif($_ =~ /reference_target.new_isolates.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name new_isolates');
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name new_isolates');
       }
       elsif($_ =~ /reference_target.SNP_distances.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name SNP_distances');
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name SNP_distances');
       }
       # amr is too much for right now
       elsif($_ =~ /amr.metadata.tsv/){
         return;
-        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name amr_metadata');
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name amr_metadata');
       }
       # Don't import straight metadata
       elsif($_ =~ /metadata.tsv/){
@@ -456,10 +474,13 @@ sub usage{
   --version          Print the version and exit
 
   OPTIONS
-  --taxon    TAXON   Limit the query to this taxon
+  --db       DBPATH  Location of sqlite database (default: $defaultDb)
+                     If --download, temporary files will be placed in
+                     the same directory that the database is in.
   --sample1  S1      PDT accession to query from
   --within   X       Number of SNPs to query away from S1
   --sample2  S2      PDT accession to query from S1
+  --amr              When querying, also include AMR results
 
   \n";
   exit 0;
