@@ -14,7 +14,7 @@ my $preop = 'true';
   #'pod2text README.pod | tee $(DISTVNAME)/README > README';
 
 WriteMakefile1(
-  NAME         => 'template',
+  NAME         => 'PDTK',
   VERSION_FROM => 'scripts/pdtk.pl',
   AUTHOR => q{Lee S. Katz <gzu2@cdc.gov>},
   EXE_FILES    => [

@@ -23,8 +23,8 @@ jobs:
           enable-modules-cache: true
           multi-thread: true
           install-modules: |
-            Perl::Critic
-            File::Which
+            "Perl::Critic"
+            "File::Which"
       - name: apt-get 
         run:  |
           sudo apt-get update -y
