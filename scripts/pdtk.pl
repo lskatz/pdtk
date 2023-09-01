@@ -387,7 +387,7 @@ sub indexAll{
       }
 
       logmsg "Indexing $File::Find::name";
-      my $sqlXopts = "-separator \$'\\t' $db";
+      my $sqlXopts = "-separator '\t' $db";
       my $importXopts = "--skip 1";
       my $cmd = "echo 'INTERNAL ERROR: no command supplied with file $File::Find::name.'; exit 2;";
       if($_ =~ /reference_target.all_isolates.tsv/){
