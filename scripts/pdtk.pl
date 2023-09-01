@@ -12,7 +12,7 @@ use Net::FTP;
 use Cwd qw/getcwd/;
 
 use version 0.77;
-our $VERSION = '0.1.1';
+our $VERSION = '0.1.2';
 
 our $baseUrl = "ftp.ncbi.nlm.nih.gov";
 our $localFiles = $ENV{HOME} . "/.pdtk";
@@ -23,8 +23,13 @@ exit(main());
 
 sub main{
   my $settings={};
-  GetOptions($settings,qw(sample1=s sample2=s within=i query taxon=s find-target=s list download help)) or die $!;
+  GetOptions($settings,qw(sample1=s sample2=s within=i query debug version taxon=s find-target=s list download help)) or die $!;
   usage() if($$settings{help});
+
+  if($$settings{version}){
+    print "$0 v$VERSION\n";
+    return 0;
+  }
 
   # Subcommand: List all taxa
   if($$settings{list}){
@@ -177,6 +182,11 @@ sub downloadAll{
 
   my $taxa = fetchListOfTaxa($settings);
 
+  if($$settings{debug}){
+    splice(@$taxa, 2,1000);
+    logmsg "DEBUGGING: just keeping two taxa: ".join(" ",@$taxa);
+  }
+
   logmsg "Downloading to $localFiles ...";
 
   # Make the new local dir
@@ -290,6 +300,7 @@ sub usage{
                      Searches fields: sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
                      Use SQLite syntax for wildcards, e.g., %
   --help             This useful help menu
+  --version          Print the version and exit
 
   OPTIONS
   --taxon    TAXON   Limit the query to this taxon
