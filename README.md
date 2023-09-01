@@ -122,3 +122,116 @@ PDT000503455.1  SAMN11784268    GCA_005875935.1 NULL    PDT000503497.1  SAMN1178
 PDT000503463.1  SAMN11784293    GCA_005875955.1 NULL    PDT000503497.1  SAMN11784330    GCA_005876095.1 NULL    PDS000045942.1    2844832 2844766 1       0       0       2       2       NULL    1       2
 ```
 
+# Database
+
+There is an underlying database under ~/.pdtk/pdtk.sqlite3 with this schema
+
+```mermaid
+erDiagram
+  all_isolates{
+    string target_acc
+    int    min_dist_same
+    int    min_dist_opp
+    int    PDS_acc
+  }
+  cluster_list{
+    string PDS_acc
+    string target_acc 
+    string biosample_acc
+    string gencoll_acc
+  }
+  new_isolates{
+    string target_acc
+    int    min_dist_same
+    int    min_dist_opp
+    string PDS_acc
+  }
+  SNP_distances{
+    string target_acc_1
+    string biosample_acc_1
+    string gencoll_acc_1
+    string sample_name_1
+    string target_acc_2
+    string biosample_acc_2
+    string gencoll_acc_2
+    string sample_name_2
+    string PDS_acc 
+    int    aligned_bases_pre_filtered
+    int    aligned_bases_post_filtered
+    int    delta_positions_unambiguousdelta_positions_one_N    
+    int    delta_positions_both_N
+    int    informative_positions   
+    int    total_positions
+    int    pairwise_bases_post_filtered
+    int    compatible_distance
+    int    compatible_positions
+  }
+  amr_metadata{
+    string FDA_lab_id
+    string HHS_region
+    string IFSAC_category 
+    string LibraryLayout 
+    string PFGE_PrimaryEnzyme_pattern
+    string PFGE_SecondaryEnzyme_pattern
+    string Platform 
+    string Runasm_acc  
+    string asm_level  
+    string asm_stats_contig_n50 
+    string asm_stats_length_bp 
+    string asm_stats_n_contig
+    string assembly_method 
+    string attribute_package 
+    string bioproject_acc 
+    string bioproject_center  
+    string biosample_acc  
+    string isolate_identifiers    
+    string collected_by   
+    string collection_date 
+    string epi_type       
+    string fullasm_id     
+    string geo_loc_name   
+    string host   
+    string host_diseaseisolation_source       
+    string lat_lon ontological_term       
+    string outbreak       
+    string sample_name    
+    string scientific_name 
+    string serovar 
+    string source_type    
+    string species_taxid  
+    string sra_center sra_release_date 
+    string strain  
+    string sequenced_by   
+    string project_name   
+    string target_acc     
+    string target_creation_date   
+    string taxid  
+    string wgs_acc_prefix 
+    string wgs_master_acc 
+    string minsame 
+    string mindiff 
+    string computed_types     
+    string number_drugs_resistant 
+    string number_drugs_intermediate       
+    string number_drugs_susceptible        
+    string number_drugs_tested     
+    string number_amr_genes       
+    string number_core_amr_genes       
+    string AST_phenotypes  
+    string AMR_genotypes   
+    string AMR_genotypes_core      
+    string number_stress_genes     
+    string stress_genotypes        
+    int    number_virulence_genes  
+    string virulence_genotypes 
+    string amrfinder_version       
+    string refgene_db_version      
+    string amrfinder_analysis_type 
+    string amrfinder_applied 
+  }
+  all_isolates ||--|| cluster_list : "target_acc, PDS_acc"
+  all_isolates ||--|| amr_metadata : "target_acc"
+  all_isolates ||--|| new_isolates : "target_acc, PDS_acc"
+  all_isolates }|--|{ SNP_distances : "target_acc_[12], PDS_acc"
+```
+

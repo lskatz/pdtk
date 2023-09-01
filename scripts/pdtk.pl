@@ -223,6 +223,129 @@ sub downloadAll{
   return 1;
 }
 
+sub createBlankDb{
+  my($db, $settings) = @_;
+
+  qx(sqlite3 \Q$db\E '
+    -- Table: all_isolates
+    CREATE TABLE all_isolates (
+        target_acc TEXT,
+        min_dist_same INTEGER,
+        min_dist_opp INTEGER,
+        PDS_acc TEXT
+    );
+
+    -- Table: cluster_list
+    CREATE TABLE cluster_list (
+        PDS_acc TEXT,
+        target_acc TEXT,
+        biosample_acc TEXT,
+        gencoll_acc TEXT
+    );
+
+    -- Table: new_isolates
+    CREATE TABLE new_isolates (
+        target_acc TEXT,
+        min_dist_same INTEGER,
+        min_dist_opp INTEGER,
+        PDS_acc TEXT
+    );
+
+    -- Table: SNP_distances
+    CREATE TABLE SNP_distances (
+        target_acc_1 TEXT,
+        biosample_acc_1 TEXT,
+        gencoll_acc_1 TEXT,
+        sample_name_1 TEXT,
+        target_acc_2 TEXT,
+        biosample_acc_2 TEXT,
+        gencoll_acc_2 TEXT,
+        sample_name_2 TEXT,
+        PDS_acc TEXT,
+        aligned_bases_pre_filtered INTEGER,
+        aligned_bases_post_filtered INTEGER,
+        delta_positions_unambiguous INTEGER,
+        delta_positions_one_N INTEGER,
+        delta_positions_both_N INTEGER,
+        informative_positions INTEGER,
+        total_positions INTEGER,
+        pairwise_bases_post_filtered INTEGER,
+        compatible_distance INTEGER,
+        compatible_positions INTEGER
+    );
+
+    -- Table: amr_metadata
+    CREATE TABLE amr_metadata (
+        FDA_lab_id TEXT,
+        HHS_region TEXT,
+        IFSAC_category TEXT,
+        LibraryLayout TEXT,
+        PFGE_PrimaryEnzyme_pattern TEXT,
+        PFGE_SecondaryEnzyme_pattern TEXT,
+        Platform TEXT,
+        Runasm_acc TEXT,
+        asm_level TEXT,
+        asm_stats_contig_n50 TEXT,
+        asm_stats_length_bp TEXT,
+        asm_stats_n_contig TEXT,
+        assembly_method TEXT,
+        attribute_package TEXT,
+        bioproject_acc TEXT,
+        bioproject_center TEXT,
+        biosample_acc TEXT,
+        isolate_identifiers TEXT,
+        collected_by TEXT,
+        collection_date TEXT,
+        epi_type TEXT,
+        fullasm_id TEXT,
+        geo_loc_name TEXT,
+        host TEXT,
+        host_diseaseisolation_source TEXT,
+        lat_lon TEXT,
+        ontological_term TEXT,
+        outbreak TEXT,
+        sample_name TEXT,
+        scientific_name TEXT,
+        serovar TEXT,
+        source_type TEXT,
+        species_taxid TEXT,
+        sra_center TEXT,
+        sra_release_date TEXT,
+        strain TEXT,
+        sequenced_by TEXT,
+        project_name TEXT,
+        target_acc TEXT,
+        target_creation_date TEXT,
+        taxid TEXT,
+        wgs_acc_prefix TEXT,
+        wgs_master_acc TEXT,
+        minsame TEXT,
+        mindiff TEXT,
+        computed_types TEXT,
+        number_drugs_resistant TEXT,
+        number_drugs_intermediate TEXT,
+        number_drugs_susceptible TEXT,
+        number_drugs_tested TEXT,
+        number_amr_genes TEXT,
+        number_core_amr_genes TEXT,
+        AST_phenotypes TEXT,
+        AMR_genotypes TEXT,
+        AMR_genotypes_core TEXT,
+        number_stress_genes TEXT,
+        stress_genotypes TEXT,
+        number_virulence_genes INTEGER,
+        virulence_genotypes TEXT,
+        amrfinder_version TEXT,
+        refgene_db_version TEXT,
+        amrfinder_analysis_type TEXT,
+        amrfinder_applied TEXT
+    );
+
+  ');
+  
+  return $db;
+}
+
 sub indexAll{
   my($settings) = @_;
 
@@ -233,7 +356,10 @@ sub indexAll{
     return 0;
   }
 
-  # TODO be smarter about combining the tsv files in Clusters directories
+  my $db = "$localFiles/pdtk.sqlite3";
+  unlink($db);
+  createBlankDb($db, $settings);
+
   find({
     wanted=>sub{
       if($_ =~ /\.(\w+)$/){
@@ -242,19 +368,46 @@ sub indexAll{
       } else {
         return;
       }
+
       logmsg "Indexing $File::Find::name";
-      my $cmd = "sqlite3 --header -separator \$'\\t' $File::Find::name.sqlite3  '.import $File::Find::name SNP_distances'";
+      my $sqlXopts = "--header -separator \$'\\t' $db";
+      my $cmd = "echo 'INTERNAL ERROR: no command supplied with file $File::Find::name.'; exit 2;";
+      if($_ =~ /reference_target.all_isolates.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name all_isolates');
+      }
+      elsif($_ =~ /reference_target.cluster_list.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name cluster_list');
+      }
+      elsif($_ =~ /reference_target.new_isolates.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name new_isolates');
+      }
+      elsif($_ =~ /reference_target.SNP_distances.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name SNP_distances');
+      }
+      # amr is too much for right now
+      elsif($_ =~ /amr.metadata.tsv/){
+        return;
+        $cmd = qq(sqlite3 $sqlXopts '.import $File::Find::name amr_metadata');
+      }
+      # Don't import straight metadata
+      elsif($_ =~ /metadata.tsv/){
+        return;
+      }
+      # Don't import the exceptions file
+      elsif($_ =~ /exceptions.tsv/){
+        return;
+      }
+
       system($cmd);
       my $exit_code = $? << 8;
       if($exit_code){
         logmsg "COMMAND was:\n  $cmd";
         die "ERROR: Could not index into sqlite3: $File::Find::name: $!";
       }
-      unlink($File::Find::name);
+      unlink($File::Find::name) if(!$$settings{debug});
     },
     no_chdir=>1}, "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results"
   );
-
 
   # Mark as complete
   open(my $fh, ">", $doneMarker) or logmsg "WARNING: could not create file $doneMarker: $!";
