@@ -422,7 +422,11 @@ sub indexAll{
         logmsg "COMMAND was:\n  $cmd";
         die "ERROR: Could not index into sqlite3: $File::Find::name: $!";
       }
-      unlink($File::Find::name) if(!$$settings{debug});
+      if($$settings{debug}){
+        logmsg "NOTE: --debug was set and so I will not remove $File::Find::name";
+      } else { 
+        unlink($File::Find::name) if(!$$settings{debug});
+      }
     },
     no_chdir=>1}, "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results"
   );

@@ -49,15 +49,15 @@ subtest 'query' => sub{
   ok("@res" =~ /Acinetobacter/, "Found Acinetobacter in the results");
   ok("@res" =~ /$sample1/, "Found $sample1 in the results");
 
-  @res = `pdtk.pl --query --db $db --sample1 $sample1 --sample2 $sample2`;
-  chomp(@res);
-  my @header = split(/\t/,shift(@res));
-  my %r;
-  my @oneResult = split(/\t/, shift(@res));
-  for(my $i=0;$i<@header;$i++){
-    $r{$header[$i]} = $oneResult[$i];
-  }
   subtest "Between $sample1 and $sample2" => sub{
+    @res = `pdtk.pl --query --db $db --sample1 $sample1 --sample2 $sample2`;
+    chomp(@res);
+    my @header = split(/\t/,shift(@res));
+    my %r;
+    my @oneResult = split(/\t/, shift(@res));
+    for(my $i=0;$i<@header;$i++){
+      $r{$header[$i]} = $oneResult[$i];
+    }
     my %exp = (
         'compatible_distance' => '37',
         'sample_name_2' => 'BA35394',
@@ -83,6 +83,17 @@ subtest 'query' => sub{
     while(my($key,$value) = each(%exp)){
       is($r{$key}, $exp{$key}, $key);
     }
+
+    # With AMR
+    @res = `pdtk.pl --query --db $db --sample1 $sample1 --sample2 $sample2 --amr`;
+    chomp(@res);
+    @header = split(/\t/,shift(@res));
+    %r = ();
+    @oneResult = split(/\t/, shift(@res));
+    for(my $i=0;$i<@header;$i++){
+      $r{$header[$i]} = $oneResult[$i];
+    }
+    print Dumper \%r;
   };
 };
 
