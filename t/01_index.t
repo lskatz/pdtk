@@ -85,15 +85,15 @@ subtest 'query' => sub{
     }
 
     # With AMR
-    @res = `pdtk.pl --query --db $db --sample1 $sample1 --sample2 $sample2 --amr`;
-    chomp(@res);
-    @header = split(/\t/,shift(@res));
-    %r = ();
-    @oneResult = split(/\t/, shift(@res));
-    for(my $i=0;$i<@header;$i++){
-      $r{$header[$i]} = $oneResult[$i];
-    }
-    print Dumper \%r;
+    #@res = `pdtk.pl --query --db $db --sample1 $sample1 --sample2 $sample2 --amr`;
+    #chomp(@res);
+    #@header = split(/\t/,shift(@res));
+    #%r = ();
+    #@oneResult = split(/\t/, shift(@res));
+    #for(my $i=0;$i<@header;$i++){
+    #  $r{$header[$i]} = $oneResult[$i];
+    #}
+    #print Dumper \%r;
   };
 };
 

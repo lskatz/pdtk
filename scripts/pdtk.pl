@@ -8,6 +8,7 @@ use File::Basename qw/basename dirname/;
 use File::Copy qw/mv/;
 use File::Path qw/rmtree/;
 use File::Find qw/find/;
+use List::Util qw/max/;
 use Net::FTP;
 use Cwd qw/getcwd/;
 
@@ -404,7 +405,9 @@ sub indexAll{
       }
       # amr is too much for right now
       elsif($_ =~ /amr.metadata.tsv/){
-        return;
+        # There are different numbers of columns expected and so that's messy
+        next;
+        ...;
         $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name amr_metadata');
       }
       # Don't import straight metadata
@@ -415,6 +418,8 @@ sub indexAll{
       elsif($_ =~ /exceptions.tsv/){
         return;
       }
+
+      #fixSpreadsheet($File::Find::name, $settings);
 
       system($cmd);
       my $exit_code = $? << 8;
@@ -437,6 +442,45 @@ sub indexAll{
 
   return 1;
 }
+
+# Ensure that all rows have the same number of fields.
+# This replaces the file contents.
+sub fixSpreadsheet{
+  my($tsv, $settings) = @_;
+
+  # What is the max number of fields?
+  my $maxFields=0;
+  open(my $fh, $tsv) or die "ERROR: could not read tsv $tsv: $!";
+  while(<$fh>){
+    my @F = split /\t/;
+    $maxFields = max(scalar(@F), $maxFields);
+  }
+  close $fh;
+  logmsg "MAX FIELDS $maxFields $tsv";
+
+  open($fh, $tsv) or die "ERROR: could not read tsv $tsv: $!";
+  open(my $outFh, ">", "$tsv.fixed") or die "ERROR: could not write to $tsv.fixed: $!";
+  while(<$fh>){
+    chomp;
+    # escape any " characters
+    s/"/\\"/g;
+    my @F = split /\t/;
+    while(@F < $maxFields){
+      push(@F, "NULL");
+    }
+    # sanitize away any whitespace
+    for(@F){
+      s/\s+//g;
+    }
+    print $outFh join("\t", @F)."\n";
+  }
+  close $outFh;
+  close $fh;
+
+  mv("$tsv.fixed", $tsv) or die "ERROR: could not replace $tsv with fixed version: $!";
+  return $tsv;
+}
+
 
 sub fetchListOfTaxa{
   my($settings) = @_;
@@ -484,7 +528,7 @@ sub usage{
   --sample1  S1      PDT accession to query from
   --within   X       Number of SNPs to query away from S1
   --sample2  S2      PDT accession to query from S1
-  --amr              When querying, also include AMR results
+  --amr              (TODO) When querying, also include AMR results
 
   \n";
   exit 0;
