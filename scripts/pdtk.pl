@@ -294,6 +294,7 @@ sub createBlankDb{
 
     -- Table: amr_metadata
     CREATE TABLE amr_metadata (
+        label
         FDA_lab_id TEXT,
         HHS_region TEXT,
         IFSAC_category TEXT,
@@ -301,7 +302,8 @@ sub createBlankDb{
         PFGE_PrimaryEnzyme_pattern TEXT,
         PFGE_SecondaryEnzyme_pattern TEXT,
         Platform TEXT,
-        Runasm_acc TEXT,
+        Run TEXT,
+        asm_acc TEXT,
         asm_level TEXT,
         asm_stats_contig_n50 TEXT,
         asm_stats_length_bp TEXT,
@@ -318,7 +320,8 @@ sub createBlankDb{
         fullasm_id TEXT,
         geo_loc_name TEXT,
         host TEXT,
-        host_diseaseisolation_source TEXT,
+        host_disease TEXT,
+        isolation_source TEXT,
         lat_lon TEXT,
         ontological_term TEXT,
         outbreak TEXT,
@@ -391,46 +394,45 @@ sub indexAll{
       my $sqlXopts = "-separator '\t' $db";
       my $importXopts = "--skip 1";
       my $cmd = "echo 'INTERNAL ERROR: no command supplied with file $File::Find::name.'; exit 2;";
-      if($_ =~ /reference_target.all_isolates.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name all_isolates');
+      my $fixedTsv = fixSpreadsheet($File::Find::name, $settings);
+
+      if($fixedTsv =~ /reference_target.all_isolates.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv all_isolates');
       }
-      elsif($_ =~ /reference_target.cluster_list.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name cluster_list');
+      elsif($fixedTsv =~ /reference_target.cluster_list.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv cluster_list');
       }
-      elsif($_ =~ /reference_target.new_isolates.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name new_isolates');
+      elsif($fixedTsv =~ /reference_target.new_isolates.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv new_isolates');
       }
-      elsif($_ =~ /reference_target.SNP_distances.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name SNP_distances');
+      elsif($fixedTsv =~ /reference_target.SNP_distances.tsv/){
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv SNP_distances');
       }
       # amr is too much for right now
-      elsif($_ =~ /amr.metadata.tsv/){
+      elsif($fixedTsv =~ /amr.metadata.tsv/){
         # There are different numbers of columns expected and so that's messy
-        next;
-        ...;
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $File::Find::name amr_metadata');
+        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv amr_metadata');
       }
       # Don't import straight metadata
-      elsif($_ =~ /metadata.tsv/){
+      elsif($fixedTsv =~ /metadata.tsv/){
         return;
       }
       # Don't import the exceptions file
-      elsif($_ =~ /exceptions.tsv/){
+      elsif($fixedTsv =~ /exceptions.tsv/){
         return;
       }
 
-      #fixSpreadsheet($File::Find::name, $settings);
 
       system($cmd);
       my $exit_code = $? << 8;
       if($exit_code){
         logmsg "COMMAND was:\n  $cmd";
-        die "ERROR: Could not index into sqlite3: $File::Find::name: $!";
+        die "ERROR: Could not index into sqlite3: $fixedTsv: $!";
       }
       if($$settings{debug}){
-        logmsg "NOTE: --debug was set and so I will not remove $File::Find::name";
+        logmsg "NOTE: --debug was set and so I will not remove $fixedTsv";
       } else { 
-        unlink($File::Find::name) if(!$$settings{debug});
+        unlink($fixedTsv);
       }
     },
     no_chdir=>1}, "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results"
@@ -462,6 +464,7 @@ sub fixSpreadsheet{
   open(my $outFh, ">", "$tsv.fixed") or die "ERROR: could not write to $tsv.fixed: $!";
   while(<$fh>){
     chomp;
+
     # escape any " characters
     s/"/\\"/g;
     my @F = split /\t/;
@@ -477,8 +480,8 @@ sub fixSpreadsheet{
   close $outFh;
   close $fh;
 
-  mv("$tsv.fixed", $tsv) or die "ERROR: could not replace $tsv with fixed version: $!";
-  return $tsv;
+  #mv("$tsv.fixed", $tsv) or die "ERROR: could not replace $tsv with fixed version: $!";
+  return "$tsv.fixed";
 }
 
 
