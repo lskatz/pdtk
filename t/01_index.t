@@ -35,14 +35,14 @@ subtest 'download' => sub{
 
 subtest 'find-target' => sub{
   for my $sample($sample1, $sample2){
-    my @res = `pdtk.pl --find-target $sample --db $db `;
+    my @res = `pdtk.pl --find-target $sample --db $db --limit 10 --debug`;
     cmp_ok(scalar(@res), '>', 1, "Got results with a header when querying $sample");
   }
 };
 
 subtest 'query' => sub{
   my $within  = 40;
-  my @res = `pdtk.pl --query --db $db --sample1 $sample1 --within $within`;
+  my @res = `pdtk.pl --query --db $db --sample1 $sample1 --within $within --limit 10 --debug`;
   cmp_ok(scalar(@res), '>', 1, "Got results with a header when querying $sample1");
 
   # Check for basic information I'd expect

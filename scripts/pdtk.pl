@@ -13,7 +13,7 @@ use Net::FTP;
 use Cwd qw/getcwd/;
 
 use version 0.77;
-our $VERSION = '0.1.3';
+our $VERSION = '0.1.4';
 
 our $baseUrl = "ftp.ncbi.nlm.nih.gov";
 our $localFiles = $ENV{HOME} . "/.pdtk";
@@ -25,8 +25,10 @@ exit(main());
 
 sub main{
   my $settings={};
-  GetOptions($settings,qw(sample1=s sample2=s db=s within=i amr query debug version find-target=s list download help)) or die $!;
+  GetOptions($settings,qw(sample1=s sample2=s db=s limit=i within=i amr query debug version find-target=s list download help)) or die $!;
   usage() if($$settings{help});
+
+  $$settings{limit} ||= 0;
 
   # Set up where the database lives
   $$settings{db} //= $defaultDb;
@@ -96,22 +98,29 @@ sub findTarget{
   }
   logmsg "Reading from $db";
 
-  my $cmd = qq(sqlite3 $db -separator "\t" --header '
+  my $cmd = qq(sqlite3 $db -separator "\t" -header "
   SELECT *
   FROM SNP_distances AS snps
-  WHERE sample_name_1 LIKE "$query" 
-    OR sample_name_2 LIKE "$query" 
-    OR biosample_acc_1 LIKE "$query"
-    OR biosample_acc_2 LIKE "$query"
-    OR target_acc_1 LIKE "$query" 
-    OR target_acc_2 LIKE "$query"
-    OR gencoll_acc_1 LIKE "$query"
-    OR gencoll_acc_2 LIKE "$query"
-    OR PDS_acc LIKE "$query"');
+  WHERE sample_name_1 LIKE '$query' 
+    OR sample_name_2 LIKE '$query' 
+    OR biosample_acc_1 LIKE '$query'
+    OR biosample_acc_2 LIKE '$query'
+    OR target_acc_1 LIKE '$query' 
+    OR target_acc_2 LIKE '$query'
+    OR gencoll_acc_1 LIKE '$query'
+    OR gencoll_acc_2 LIKE '$query'
+    OR PDS_acc LIKE '$query'");
   
+  if($$settings{limit}){
+    $cmd =~ s/(['"])$/\nLIMIT $$settings{limit}$1/;
+  }
+
   # If we want AMR results, add in a LEFT JOIN statement
   if($$settings{amr}){
     $cmd =~ s/(FROM SNP_distances AS snps)/$1\nLEFT JOIN amr_metadata AS amr\nON snps.target_acc_1 = amr.target_acc OR snps.target_acc_2 = amr.target_acc\n/;
+  }
+  if($$settings{debug}){
+    logmsg "COMMAND: ".$cmd;
   }
 
   system($cmd);
@@ -155,6 +164,14 @@ sub querySample{
   # If we want AMR results, add in a LEFT JOIN statement
   if($$settings{amr}){
     $cmd =~ s/(FROM SNP_distances AS snps)/$1\nLEFT JOIN amr_metadata AS amr\nON snps.target_acc_1 = amr.target_acc OR snps.target_acc_2 = amr.target_acc\n/;
+  }
+
+  if($$settings{limit}){
+    $cmd =~ s/(')$/\nLIMIT $$settings{limit}$1/;
+  }
+
+  if($$settings{debug}){
+    logmsg "COMMAND: $cmd";
   }
   
   my @res = `$cmd`;
@@ -215,13 +232,18 @@ sub downloadAll{
   {
     my $cwd = getcwd;
     chdir($localFiles);
+    if(!-d "log"){
+      mkdir("log")
+        or die "ERROR: could not make a directory $localFiles/log: $!";
+    }
+
     for my $TAXON(@$taxa){
       logmsg "Downloading $TAXON";
       system("wget --continue -r \\
           -X/pathogen/Results/$TAXON/latest_snps/SNP_trees \\
           -X/pathogen/Results/$TAXON/latest_snps/Trees \\
           ftp://ftp.ncbi.nlm.nih.gov/pathogen/Results/$TAXON/latest_snps/ \\
-          > $TAXON.log 2>&1
+          > log/$TAXON.log 2>&1
         ");
       my $exit_code = $? << 8;
       if($exit_code){
@@ -294,7 +316,7 @@ sub createBlankDb{
 
     -- Table: amr_metadata
     CREATE TABLE amr_metadata (
-        label
+        label TEXT,
         FDA_lab_id TEXT,
         HHS_region TEXT,
         IFSAC_category TEXT,
@@ -458,7 +480,7 @@ sub fixSpreadsheet{
     $maxFields = max(scalar(@F), $maxFields);
   }
   close $fh;
-  logmsg "MAX FIELDS $maxFields $tsv";
+  #logmsg "MAX FIELDS $maxFields $tsv";
 
   open($fh, $tsv) or die "ERROR: could not read tsv $tsv: $!";
   open(my $outFh, ">", "$tsv.fixed") or die "ERROR: could not write to $tsv.fixed: $!";
@@ -473,7 +495,7 @@ sub fixSpreadsheet{
     }
     # sanitize away any whitespace
     for(@F){
-      s/\s+//g;
+      s/^\s+$//g;
     }
     print $outFh join("\t", @F)."\n";
   }
@@ -532,6 +554,11 @@ sub usage{
   --within   X       Number of SNPs to query away from S1
   --sample2  S2      PDT accession to query from S1
   --amr              (TODO) When querying, also include AMR results
+  --limit    LMT     How many database entries to return at once.
+                     Default: 0 (unlimited)
+  --debug            When --download, only downloads the first two taxa
+                     When --query, prints the SQL command
+                     When --find-target, prints the SQL command
 
   \n";
   exit 0;
