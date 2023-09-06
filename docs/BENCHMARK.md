@@ -4,7 +4,7 @@ These are stats for v0.1.6
 
 ## Sizes
 
-All databases were created, then cleaned with `--clean`, then `--veryclean`
+All databases were created with `--download`, then cleaned with `--clean`, then `--veryclean`
 
 |taxon|raw|clean|veryclean|
 |-----|---|-----|---------|
