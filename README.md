@@ -12,7 +12,10 @@ For more information: https://www.ncbi.nlm.nih.gov/pathogens
   --list             List which taxa are available
   --download         Download data to ~/.pdtk
   --query            Query from S1
-  --clean            (TODO) clean up ~/.pdtk
+  --clean            Clean up any unneeded files in ~/.pdtk
+  --veryclean        Cleans up anything in --clean, plus
+                     removes any files created in --download.
+                     The database remains intact.
   --find-target S1   Find rows matching an accession.
                      Useful for finding PDT accessions.
                      Searches fields: sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc

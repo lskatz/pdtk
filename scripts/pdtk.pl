@@ -13,7 +13,7 @@ use Net::FTP;
 use Cwd qw/getcwd/;
 
 use version 0.77;
-our $VERSION = '0.1.4';
+our $VERSION = '0.1.6';
 
 our $baseUrl = "ftp.ncbi.nlm.nih.gov";
 our $localFiles = $ENV{HOME} . "/.pdtk";
@@ -24,11 +24,14 @@ sub logmsg{local $0=basename $0; print STDERR "$0: @_\n";}
 exit(main());
 
 sub main{
+  usage() if(!@ARGV);
+
   my $settings={};
-  GetOptions($settings,qw(sample1=s sample2=s db=s limit=i within=i amr query debug version find-target=s list download help)) or die $!;
-  usage() if(!@ARGV || $$settings{help});
+  GetOptions($settings,qw(sample1=s sample2=s db=s limit=i within=i amr query debug version find-target=s list taxa=s download clean veryclean help)) or die $!;
+  usage() if($$settings{help});
 
   $$settings{limit} ||= 0;
+  $$settings{taxa}  ||= '';
 
   # Set up where the database lives
   $$settings{db} //= $defaultDb;
@@ -47,8 +50,14 @@ sub main{
     return 0;
   }
 
+  # Clean up the download directory
+  elsif($$settings{clean} || $$settings{veryclean}){
+    cleanup($settings);
+    return 0;
+  }
+
   # Subcommand: download whole database
-  if($$settings{download}){
+  elsif($$settings{download}){
     downloadAll($settings);
     indexAll($settings);
     #compressAll($settings);
@@ -56,13 +65,13 @@ sub main{
   }
 
   # Subcommand: find target
-  if($$settings{'find-target'}){
+  elsif($$settings{'find-target'}){
     findTarget($$settings{'find-target'}, $settings);
     return 0;
   }
 
   # Subcommand: query
-  if($$settings{query}){
+  elsif($$settings{query}){
     my $res = querySample($settings);
     my @sampleHit = sort keys(%$res);
 
@@ -82,6 +91,55 @@ sub main{
   }
 
   return 0;
+}
+
+sub cleanup{
+  my($settings) = @_;
+  find({wanted=>sub{
+      my @F = split(/\./, basename($File::Find::name));
+
+      # If this is one of the files I fixed in fixSpreadsheet(), rm it
+      if($F[-1] eq 'fixed'){
+        _rm($File::Find::name);
+      }
+
+      # I don't use the xml files for anything in the toolkit
+      elsif($F[-1] eq 'xml'){
+        _rm($File::Find::name);
+      }
+
+      # I don't use the exeption files in the toolkit
+      elsif($File::Find::name =~ /exceptions.tsv/){
+        _rm($File::Find::name);
+      }
+
+      elsif($$settings{veryclean}){
+        if($F[-1] eq 'tsv'){
+          _rm($File::Find::name);
+        }
+      }
+    },
+    no_chdir=>1}, "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results"
+  );
+
+  if($$settings{veryclean}){
+    _rm("$localFiles/.01_downloaded");
+    for my $f(glob("$localFiles/cat/*.tsv")){
+      _rm($f);
+    }
+  }
+
+  return 1;
+}
+
+sub _rm{
+  my($f, $settings) = @_;
+  if($$settings{debug}){
+    logmsg "NOTE: --debug was set. I would have unlinked $f";
+  } else {
+    unlink($f) or logmsg "WARNING: could not unlink $f: $!";
+  }
+  return 1;
 }
 
 sub findTarget{
@@ -214,11 +272,6 @@ sub downloadAll{
   }
 
   my $taxa = fetchListOfTaxa($settings);
-
-  if($$settings{debug}){
-    splice(@$taxa, 2,1000);
-    logmsg "DEBUGGING: just keeping two taxa: ".join(" ",@$taxa);
-  }
 
   logmsg "Downloading to $localFiles ...";
 
@@ -396,12 +449,14 @@ sub indexAll{
   my $doneMarker = "$localFiles/.03_index";
 
   if(-e $doneMarker){
-    logmsg "NOTE: files have already been compressed. Remove $doneMarker to release the lock.";
+    logmsg "NOTE: files have already been indexed. Remove $doneMarker to release the lock.";
     return 0;
   }
 
   my $db = "$localFiles/pdtk.sqlite3";
-  unlink($db);
+  if(-e $db){
+    _rm($db);
+  }
   createBlankDb($db, $settings);
   my $catDir = "$localFiles/cat";
   if(!-d $catDir){
@@ -546,6 +601,25 @@ sub fetchListOfTaxa{
     grep {! /WARNING.txt|BioProject_hierarchy/i }
     @list;
 
+  # Limit the taxa if the user requests it
+  if($$settings{taxa}){
+    my @wantedTaxa = split(/,/, $$settings{taxa});
+    # compare the list vs what's online
+    for my $w(@wantedTaxa){
+      if(!grep{$_ eq $w} @list){
+        die "ERROR: user requested $w but it is not a taxon listed in PD";
+      }
+    }
+
+    # Now that these requested taxa are cleared, set the taxa
+    @list = @wantedTaxa;
+  }
+
+  if($$settings{debug}){
+    splice(@list, 2,1000);
+    logmsg "NOTE: --debug was given; just keeping two taxa: ".join(" ",@list);
+  }
+
   return \@list;
 }
 
@@ -556,7 +630,10 @@ sub usage{
   --list             List which taxa are available
   --download         Download data to ~/.pdtk
   --query            Query from S1
-  --clean            (TODO) clean up ~/.pdtk
+  --clean            Clean up any unneeded files in ~/.pdtk
+  --veryclean        Cleans up anything in --clean, plus
+                     removes any files created in --download.
+                     The database remains intact.
   --find-target S1   Find rows matching an accession.
                      Useful for finding PDT accessions.
                      Searches fields: sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
@@ -577,7 +654,10 @@ sub usage{
   --debug            When --download, only downloads the first two taxa
                      When --query, prints the SQL command
                      When --find-target, prints the SQL command
-
+  --taxa     TAXA    Limit to certain taxa. Comma separated.
+                     Default: '', indicating all taxa.
+                     When --download, only limits to certain taxa.
+                     When --list, only limits to certain taxa.
   \n";
   exit 0;
 }
