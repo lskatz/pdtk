@@ -7,7 +7,6 @@ For more information: https://www.ncbi.nlm.nih.gov/pathogens
 # Usage
 
 ```text
-pdtk.pl: interacts with the NCBI Pathogens Portal
   Usage: pdtk.pl [options]
   SUBCOMMANDS
   --list             List which taxa are available
@@ -19,12 +18,22 @@ pdtk.pl: interacts with the NCBI Pathogens Portal
                      Searches fields: sample_name, biosample_acc, target_acc, gencoll_acc, PDS_acc
                      Use SQLite syntax for wildcards, e.g., %
   --help             This useful help menu
+  --version          Print the version and exit
 
   OPTIONS
-  --taxon    TAXON   Limit the query to this taxon
+  --db       DBPATH  Location of sqlite database (default: /scicomp/home-pure/gzu2/.pdtk/pdtk.sqlite3)
+                     If --download, temporary files will be placed in
+                     the same directory that the database is in.
   --sample1  S1      PDT accession to query from
   --within   X       Number of SNPs to query away from S1
   --sample2  S2      PDT accession to query from S1
+  --amr              (TODO) When querying, also include AMR results
+  --limit    LMT     How many database entries to return at once.
+                     Default: 0 (unlimited)
+  --debug            When --download, only downloads the first two taxa
+                     When --query, prints the SQL command
+                     When --find-target, prints the SQL command
+
 ```
 
 # Installation

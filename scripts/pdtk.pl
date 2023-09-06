@@ -26,7 +26,7 @@ exit(main());
 sub main{
   my $settings={};
   GetOptions($settings,qw(sample1=s sample2=s db=s limit=i within=i amr query debug version find-target=s list download help)) or die $!;
-  usage() if($$settings{help});
+  usage() if(!@ARGV || $$settings{help});
 
   $$settings{limit} ||= 0;
 
