@@ -389,6 +389,7 @@ sub createBlankDb{
   return $db;
 }
 
+# Import everything into the database using sqlite's import function
 sub indexAll{
   my($settings) = @_;
 
@@ -402,6 +403,14 @@ sub indexAll{
   my $db = "$localFiles/pdtk.sqlite3";
   unlink($db);
   createBlankDb($db, $settings);
+  my $catDir = "$localFiles/cat";
+  if(!-d $catDir){
+    mkdir($catDir) or die "ERROR: could not make dir $catDir: $!";
+  }
+
+  # Make a few file handles whose keys are $fileType
+  # e.g., amr.metadata
+  my %outFh;
 
   find({
     wanted=>sub{
@@ -409,56 +418,64 @@ sub indexAll{
         my $ext = $1;
         return if($ext !~ /tsv/);
       } else {
+        # Return if we don't have an extension
         return;
       }
 
-      logmsg "Indexing $File::Find::name";
-      my $sqlXopts = "-separator '\t' $db";
-      my $importXopts = "--skip 1";
-      my $cmd = "echo 'INTERNAL ERROR: no command supplied with file $File::Find::name.'; exit 2;";
+      my($PDG, $version, $fileType, $ext, $other) = split(/\./, basename($File::Find::name));
+      if($fileType eq 'amr' && $ext eq 'metadata'){
+        $fileType = "amr.metadata";
+        $ext = $other;
+      }
+      if($fileType eq 'reference_target'){
+        $fileType .= ".$ext";
+        $ext = $other;
+      }
+
+      if(!$outFh{$fileType}){
+        open($outFh{$fileType}, ">", "$catDir/$fileType.$ext") or die "ERROR: could not write to $catDir/$fileType.$ext: $!";
+      }
+
+      # Read the fixed TSV and cat it onto the running tsv for this file.
+      logmsg "Reading in $File::Find::name";
       my $fixedTsv = fixSpreadsheet($File::Find::name, $settings);
+      {
+        local $/ = undef;
+        open(my $fh, "<", $fixedTsv) or die "ERROR: could not read $fixedTsv: $!";
+        my $content = <$fh>;
+        close $fh;
 
-      if($fixedTsv =~ /reference_target.all_isolates.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv all_isolates');
-      }
-      elsif($fixedTsv =~ /reference_target.cluster_list.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv cluster_list');
-      }
-      elsif($fixedTsv =~ /reference_target.new_isolates.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv new_isolates');
-      }
-      elsif($fixedTsv =~ /reference_target.SNP_distances.tsv/){
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv SNP_distances');
-      }
-      # amr is too much for right now
-      elsif($fixedTsv =~ /amr.metadata.tsv/){
-        # There are different numbers of columns expected and so that's messy
-        $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $fixedTsv amr_metadata');
-      }
-      # Don't import straight metadata
-      elsif($fixedTsv =~ /metadata.tsv/){
-        return;
-      }
-      # Don't import the exceptions file
-      elsif($fixedTsv =~ /exceptions.tsv/){
-        return;
-      }
-
-
-      system($cmd);
-      my $exit_code = $? << 8;
-      if($exit_code){
-        logmsg "COMMAND was:\n  $cmd";
-        die "ERROR: Could not index into sqlite3: $fixedTsv: $!";
-      }
-      if($$settings{debug}){
-        logmsg "NOTE: --debug was set and so I will not remove $fixedTsv";
-      } else { 
-        unlink($fixedTsv);
+        my $outFh = $outFh{$fileType};
+        print $outFh $content;
       }
     },
     no_chdir=>1}, "$localFiles/ftp.ncbi.nlm.nih.gov/pathogen/Results"
   );
+  logmsg "Done reading individual files and catting them. Now indexing.";
+
+  my $sqlXopts = "-separator '\t' $db";
+  my $importXopts = "";
+  my $cmd = "echo 'INTERNAL ERROR: no command supplied.'; exit 2;";
+
+  # AMR metadata
+  logmsg "Indexing $localFiles/cat/amr.metadata.tsv";
+  $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $localFiles/cat/amr.metadata.tsv amr_metadata');
+  system($cmd);
+  my $exit_code = $? << 8;
+  if($exit_code){
+    logmsg "COMMAND was:\n  $cmd";
+    die "ERROR: Could not index into sqlite3: $$localFiles/cat/amr.metadata.tsv $!";
+  }
+
+  # snp distances
+  logmsg "Indexing $localFiles/cat/reference_target.SNP_distances.tsv";
+  $cmd = qq(sqlite3 $sqlXopts '.import $importXopts $localFiles/cat/reference_target.SNP_distances.tsv SNP_distances');
+  system($cmd);
+  $exit_code = $? << 8;
+  if($exit_code){
+    logmsg "COMMAND was:\n  $cmd";
+    die "ERROR: Could not index into sqlite3: $localFiles/cat/reference_target.SNP_distances.tsv: $!";
+  }
 
   # Mark as complete
   open(my $fh, ">", $doneMarker) or logmsg "WARNING: could not create file $doneMarker: $!";
@@ -483,6 +500,7 @@ sub fixSpreadsheet{
   #logmsg "MAX FIELDS $maxFields $tsv";
 
   open($fh, $tsv) or die "ERROR: could not read tsv $tsv: $!";
+  my $header = <$fh>; # discard the header
   open(my $outFh, ">", "$tsv.fixed") or die "ERROR: could not write to $tsv.fixed: $!";
   while(<$fh>){
     chomp;
