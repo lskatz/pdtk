@@ -8,8 +8,8 @@ All databases were created with `--download`, then cleaned with `--clean`, then 
 
 |taxon|raw|clean|veryclean|
 |-----|---|-----|---------|
-|Enterobacter\_cancerogenus|512|512|512|
-|Klebsiella|512|512|512|
+|~~Enterobacter\_cancerogenus~~|~~512~~|~~512~~|~~512~~|
+|~~Klebsiella~~|~~512~~|~~512~~|~~512~~|
 |Kosakonia\_oryziphila|78K|60K|52K|
 |Phytobacter\_massiliensis|95K|64K|52K|
 |Kosakonia\_oryzendophytica|110K|66K|52K|
