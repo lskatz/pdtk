@@ -21,7 +21,7 @@ For more information: https://www.ncbi.nlm.nih.gov/pathogens
   --version          Print the version and exit
 
   OPTIONS
-  --db       DBPATH  Location of sqlite database (default: /scicomp/home-pure/gzu2/.pdtk/pdtk.sqlite3)
+  --db       DBPATH  Location of sqlite database (default: ~/.pdtk/pdtk.sqlite3)
                      If --download, temporary files will be placed in
                      the same directory that the database is in.
   --sample1  S1      PDT accession to query from
