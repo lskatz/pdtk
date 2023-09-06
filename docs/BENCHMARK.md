@@ -7,6 +7,7 @@ These are stats for v0.1.6
 All databases were created, then cleaned with `--clean`, then `--veryclean`
 
 |taxon|raw|clean|veryclean|
+|-----|---|-----|---------|
 |Enterobacter\_cancerogenus|512|512|512|
 |Klebsiella|512|512|512|
 |Kosakonia\_oryziphila|78K|60K|52K|
@@ -93,6 +94,7 @@ _Erratra_
 Two taxa did not download correctly in the original test and so they are here
 
 |taxon|raw|clean|veryclean|
+|-----|---|-----|---------|
 |Enterobacter\_cancerogenus|605K|175K|77K|
 |Klebsiella|5.8G|3.4G|1.3G|
 
